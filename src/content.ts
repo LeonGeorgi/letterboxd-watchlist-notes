@@ -1,6 +1,7 @@
 import { initializeFilmPage } from './film/film';
 import { initializeWatchlist } from './watchlist/watchlist';
 import { getAllNotesSync } from './util/storage';
+import { initializeList } from './list/list';
 
 function initialize(notes: { [key: string]: string }) {
   console.log(notes);
@@ -8,19 +9,23 @@ function initialize(notes: { [key: string]: string }) {
   if (url.startsWith('https://letterboxd.com/film/')) {
     initializeFilmPage(notes);
   }
-
+  if (url.match(/https:\/\/letterboxd\.com\/.+\/list\//)) {
+    initializeList(notes);
+  }
+  /*
   // if url is like https://letterboxd.com/[username]/watchlist/, call initializeWatchlist()
   const regex = /https:\/\/letterboxd\.com\/.+\/watchlist\//;
   if (regex.test(url)) {
     initializeWatchlist(notes);
   }
+   */
 }
 
 // get notes from local storage
 const notesFromLocalStorage = localStorage.getItem('notes');
 
-function initializeWithFetchedNotes() {
-  getAllNotesSync().then((notes) => {
+function initializeWithFetchedNotes(noteListId: string) {
+  getAllNotesSync(noteListId).then((notes) => {
     localStorage.setItem('notes', JSON.stringify({ notes, cacheValid: true, date: new Date() }));
     initialize(notes);
   }).catch((error) => {
@@ -28,7 +33,10 @@ function initializeWithFetchedNotes() {
   });
 }
 
-if (notesFromLocalStorage) {
+const noteListId = localStorage.getItem('noteList');
+if (!noteListId) {
+  initialize({})
+} else if (notesFromLocalStorage) {
   const { notes, cacheValid, date } = JSON.parse(notesFromLocalStorage);
   // if cache is valid and date is less than 1 day old, use notes from local storage
   if (cacheValid) {
@@ -41,13 +49,13 @@ if (notesFromLocalStorage) {
       initialize(notes);
     } else {
       console.log('Cache is outdated. Fetching notes from Letterboxd.');
-      initializeWithFetchedNotes();
+      initializeWithFetchedNotes(noteListId);
     }
   } else {
     console.log('Cache is invalid. Fetching notes from Letterboxd.');
-    initializeWithFetchedNotes();
+    initializeWithFetchedNotes(noteListId);
   }
 } else {
   console.log('Notes not found in local storage. Fetching notes from Letterboxd.');
-  initializeWithFetchedNotes();
+  initializeWithFetchedNotes(noteListId);
 }

@@ -8,7 +8,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'src/main.ts'),
         content: resolve(__dirname, 'src/content.ts'),
       },
       output: {

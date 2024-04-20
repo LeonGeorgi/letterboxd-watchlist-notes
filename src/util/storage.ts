@@ -1,9 +1,13 @@
-export function saveNoteSync(note: string, filmId: string, isNewMovie: boolean): Promise<boolean> {
+export function getUsernameFromCookies() {
+  return document.cookie.match(/letterboxd\.signed\.in\.as=([^;]+);/)?.[1];
+}
+
+export function saveNoteSync(note: string, filmId: string, isNewMovie: boolean, listId: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
-    const username = document.cookie.match(/letterboxd\.signed\.in\.as=([^;]+);/)?.[1];
+    const username = getUsernameFromCookies();
     console.log('username:', username);
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', `https://letterboxd.com/${username}/list/watchlist/edit/`, true);
+    xhr.open('GET', `https://letterboxd.com/${username}/list/${listId}/edit/`, true);
     xhr.withCredentials = true;
     xhr.onreadystatechange = function () {
       if (xhr.readyState === 4 && xhr.status === 200) {
@@ -73,12 +77,12 @@ export function saveNoteSync(note: string, filmId: string, isNewMovie: boolean):
   });
 }
 
-export function getAllNotesSync(): Promise<{ [key: string]: string }> {
+export function getAllNotesSync(noteListId: string): Promise<{ [key: string]: string }> {
   return new Promise((resolve, reject) => {
     const username = document.cookie.match(/letterboxd\.signed\.in\.as=([^;]+);/)?.[1];
     console.log('username:', username);
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', `https://letterboxd.com/${username}/list/watchlist/edit/`, true);
+    xhr.open('GET', `https://letterboxd.com/${username}/list/${noteListId}/edit/`, true);
     xhr.withCredentials = true;
     xhr.onreadystatechange = function () {
       if (xhr.readyState === 4 && xhr.status === 200) {

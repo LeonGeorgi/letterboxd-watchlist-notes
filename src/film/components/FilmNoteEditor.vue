@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import {
+  getUsernameFromCookies,
   invalidateCache,
   saveNoteSync,
 } from '../../util/storage';
 import { computed, ref } from 'vue';
 
 const props = defineProps<{ isVisible: boolean, notes: { [key: string]: string } }>();
-const parsedFilmId = document.querySelector('#userpanel .film-watch-link-target')?.getAttribute('data-film-id');
+const parsedFilmId = document.querySelector('.col-poster-large .film-watch-link-target')
+?.getAttribute(
+    'data-film-id');
 if (!parsedFilmId) {
   console.error('Could not find film ID in userpanel');
 }
 const filmId = parsedFilmId ?? '';
-const textareaContent = ref(props.notes[filmId] ?? '');
 
+const noteListId: string | null = localStorage.getItem('noteList');
+
+const textareaContent = ref(props.notes[filmId] ?? '');
 const performingSave = ref(false);
+
+const username = getUsernameFromCookies()
+const listsUrl = `https://letterboxd.com/${username}/lists/`
 
 function setTextareaContent(event: Event) {
   const target = event.target as HTMLTextAreaElement;
@@ -31,12 +39,19 @@ async function save() {
     console.error('Could not find film ID in URL:', sharingUrl);
   }
   const filmSharingId = parsedFilmSharingId ?? '';
-  const success = await saveNoteSync(textareaContent.value, filmSharingId, !props.notes[filmId])
-  if (success) {
-    console.log('Saved note:', textareaContent.value);
-    invalidateCache();
+  if (noteListId) {
+    const success = await saveNoteSync(textareaContent.value,
+        filmSharingId,
+        !props.notes[filmId],
+        noteListId);
+    if (success) {
+      console.log('Saved note:', textareaContent.value);
+      invalidateCache();
+    } else {
+      console.error('Failed to save note');
+    }
   } else {
-    console.error('Failed to save note');
+    console.error('No note list ID configured');
   }
   performingSave.value = false;
 }
@@ -50,8 +65,11 @@ async function save() {
     boxSizing: 'border-box',
     backgroundColor: '#456',
     borderBottom: '1px solid #2c3440',
+    position: 'relative',
   }">
-    <textarea :style="{
+    <div>
+
+    <textarea v-if="noteListId !== null" :style="{
       height: '100px',
       width: '100%',
       backgroundColor: '#789',
@@ -61,12 +79,37 @@ async function save() {
     }" class="textarea" :value="textareaContent" @input="setTextareaContent"
               :disabled="performingSave"
     ></textarea>
-    <div :style="{
+      <div :style="{
       display: 'flex',
       justifyContent: 'flex-start',
       gap: '8px',
+    }" v-if="noteListId !== null">
+        <button class="button button-action" @click="save"
+                :disabled="performingSave">Save
+        </button>
+      </div>
+    </div>
+    <div v-if="noteListId === null" :style="{
+      backgroundColor: '#dc4c4c',
+      width: '100%',
+      padding: '8px',
+      borderRadius: '4px',
+      boxSizing: 'border-box',
+      color: '#ffffff'
     }">
-      <button class="button button-action" @click="save">Save</button>
+    <span :style="{
+      display: 'block',
+      textAlign: 'center',
+      // line spacing should be 1.5 times the font size
+      lineHeight: '1.5em',
+    }">
+      No note list configured.
+      <a :href="listsUrl" :style="{
+        color: '#ffffff',
+        textDecoration: 'underline',
+        cursor: 'pointer'
+      }">Open a list</a> and click "Use for watchlist notes" to configure one.
+    </span>
     </div>
   </div>
 </template>

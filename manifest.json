@@ -2,9 +2,6 @@
   "manifest_version": 3,
   "name": "Letterboxd Watchlist Notes",
   "version": "1.0",
-  "background": {
-    "service_worker": "dist/main.js"
-  },
   "permissions": [
     "activeTab",
     "scripting"
@@ -19,7 +16,6 @@
     }
   ],
   "action": {
-    "default_popup": "public/popup.html",
     "default_icon": {
       "16": "public/icons/icon16.png",
       "48": "public/icons/icon48.png",
