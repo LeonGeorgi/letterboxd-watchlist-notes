@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <rect width="1280" height="800" fill="#14181c"/>
+  <image href="raw-watchlist.png" x="0" y="80" width="1280" height="720"/>
+
+  <rect width="1280" height="80" fill="#202830"/>
+  <rect x="0" y="0" width="8" height="80" fill="#ff8000"/>
+  <circle cx="49" cy="40" r="10" fill="#ff8000"/>
+  <circle cx="69" cy="40" r="10" fill="#00e054"/>
+  <circle cx="89" cy="40" r="10" fill="#40bcf4"/>
+  <text x="120" y="35" fill="#ffffff" font-family="Arial" font-size="24" font-weight="700">REMEMBER WHY YOU SAVED IT</text>
+  <text x="120" y="59" fill="#9ab" font-family="Arial" font-size="15">Personal notes appear directly on your Letterboxd watchlist.</text>
+
+  <g font-family="Arial">
+    <rect x="304" y="405" width="117" height="76" rx="3" fill="#1f2730" fill-opacity="0.97"/>
+    <rect x="304" y="405" width="4" height="76" rx="2" fill="#ff8000"/>
+    <text x="314" y="421" fill="#ff9d3d" font-size="9" font-weight="700" letter-spacing="0.8">MY NOTE</text>
+    <text x="314" y="439" fill="#dceeff" font-size="10.5">
+      <tspan x="314" dy="0">Psychological</tspan>
+      <tspan x="314" dy="14">anime classic —</tspan>
+      <tspan x="314" dy="14">late-night watch.</tspan>
+    </text>
+
+    <rect x="439" y="414" width="117" height="67" rx="3" fill="#1f2730" fill-opacity="0.97"/>
+    <rect x="439" y="414" width="4" height="67" rx="2" fill="#ff8000"/>
+    <text x="449" y="430" fill="#ff9d3d" font-size="9" font-weight="700" letter-spacing="0.8">MY NOTE</text>
+    <text x="449" y="448" fill="#dceeff" font-size="10.5">
+      <tspan x="449" dy="0">Recommended by</tspan>
+      <tspan x="449" dy="14">Maya. Bring tissues.</tspan>
+    </text>
+
+    <rect x="169" y="611" width="117" height="67" rx="3" fill="#1f2730" fill-opacity="0.97"/>
+    <rect x="169" y="611" width="4" height="67" rx="2" fill="#ff8000"/>
+    <text x="179" y="627" fill="#ff9d3d" font-size="9" font-weight="700" letter-spacing="0.8">MY NOTE</text>
+    <text x="179" y="645" fill="#dceeff" font-size="10.5">
+      <tspan x="179" dy="0">A calm Tokyo film</tspan>
+      <tspan x="179" dy="14">for Sunday.</tspan>
+    </text>
+
+    <rect x="574" y="414" width="117" height="67" rx="3" fill="#1f2730" fill-opacity="0.97"/>
+    <rect x="574" y="414" width="4" height="67" rx="2" fill="#ff8000"/>
+    <text x="584" y="430" fill="#ff9d3d" font-size="9" font-weight="700" letter-spacing="0.8">MY NOTE</text>
+    <text x="584" y="448" fill="#dceeff" font-size="10.5">
+      <tspan x="584" dy="0">Try before reading</tspan>
+      <tspan x="584" dy="14">anything about it.</tspan>
+    </text>
+  </g>
+</svg>
