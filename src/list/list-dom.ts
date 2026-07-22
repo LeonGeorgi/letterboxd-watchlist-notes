@@ -1,13 +1,17 @@
 export function findListActionsPanel(root: ParentNode = document): HTMLElement | null {
   return (
-    root.querySelector<HTMLElement>('#userpanel[data-component-class="ListSidebar"]') ??
-    root.querySelector<HTMLElement>('#userpanel.actions-panel') ??
-    root.querySelector<HTMLElement>('.sidebar .actions-panel[data-list-identifier]')
+    root.querySelector<HTMLElement>('[data-component-class="ListSidebar"][data-list-identifier]') ??
+    root.querySelector<HTMLElement>('[data-component-class="ListSidebar"]') ??
+    root.querySelector<HTMLElement>('#userpanel[data-list-identifier]') ??
+    root.querySelector<HTMLElement>('.actions-panel[data-list-identifier]')
   );
 }
 
 export function findListActions(panel: ParentNode): HTMLUListElement | null {
-  return panel.querySelector<HTMLUListElement>('ul');
+  return (
+    panel.querySelector<HTMLUListElement>(':scope > ul') ??
+    panel.querySelector<HTMLUListElement>('ul')
+  );
 }
 
 export function getListSlug(pathname: string = window.location.pathname) {

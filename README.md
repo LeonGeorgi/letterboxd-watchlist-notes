@@ -31,6 +31,8 @@ After changing the source, run `pnpm dev`, then reload the extension from `chrom
 
 The extension reads the signed-in Letterboxd username from Letterboxd's own session cookie. It communicates only with `letterboxd.com` and does not require separate login credentials.
 
+See the [privacy policy](PRIVACY.md) for details about the data handled by the extension.
+
 ## Development
 
 ```sh

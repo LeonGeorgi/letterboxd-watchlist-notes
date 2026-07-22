@@ -45,6 +45,25 @@ describe('Letterboxd list page DOM', () => {
     expect(findListActions(panel!)?.tagName).toBe('UL');
   });
 
+  it('finds a renamed list sidebar by its semantic component attributes', () => {
+    document.body.innerHTML = `
+      <aside>
+        <section
+          class="actions-panel"
+          data-component-class="ListSidebar"
+          data-list-identifier='{"lid":"TAiIo"}'
+        >
+          <ul><li>Edit this list</li></ul>
+        </section>
+      </aside>
+    `;
+
+    const panel = findListActionsPanel();
+
+    expect(panel).not.toBeNull();
+    expect(findListActions(panel!)?.textContent).toContain('Edit this list');
+  });
+
   it('extracts and decodes the list slug from the pathname', () => {
     expect(getListSlug('/leongeorgi/list/watchlist%20notes/')).toBe('watchlist notes');
   });

@@ -41,9 +41,11 @@ function initializeNotesPage(initialize: NotesInitializer) {
 
 const { hostname, pathname } = window.location;
 if (hostname === 'letterboxd.com') {
+  // Keep the list selector ready even when Letterboxd replaces or navigates its React sidebar.
+  initializeList();
+
   if (/^\/[^/]+\/list\//.test(pathname)) {
-    // List selection must never be blocked by loading the configured note list.
-    initializeList();
+    // List pages do not need the configured notes cache.
   } else if (pathname.startsWith('/film/')) {
     initializeNotesPage(initializeFilmPage);
   } else if (isWatchlistPath(pathname)) {
