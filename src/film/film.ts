@@ -1,5 +1,5 @@
 import { createApp } from 'vue';
-import type { ComponentPublicInstance } from 'vue';
+import type { App, ComponentPublicInstance } from 'vue';
 import FilmWrapper from './components/FilmWrapper.vue';
 import {
   findActionsPanel,
@@ -14,105 +14,106 @@ type FilmWrapperInstance = ComponentPublicInstance & {
   hide: () => void;
 };
 
+type MountedEditor = {
+  app: App<Element>;
+  element: HTMLElement;
+  instance: FilmWrapperInstance;
+};
+
 function mountVueComponent(
   element: HTMLElement,
   notes: { [key: string]: string },
   identifiers: ProductionIdentifiers,
-): FilmWrapperInstance {
+): MountedEditor {
   const app = createApp(FilmWrapper, { notes, ...identifiers });
-  return app.mount(element) as FilmWrapperInstance;
+  const instance = app.mount(element) as FilmWrapperInstance;
+  return { app, element, instance };
 }
 
 function insertVueComponentIntoPage(
+  actionsPanel: HTMLElement,
   notes: { [key: string]: string },
   identifiers: ProductionIdentifiers,
-): FilmWrapperInstance {
-  const actionsRow = findActionsPanel();
-  if (!actionsRow) {
-    throw new Error('Letterboxd actions panel not found.');
-  }
-
+): MountedEditor {
   const element = document.createElement('li');
   element.dataset.watchlistNotesExtension = 'editor';
-  const sharingAction = actionsRow.querySelector('.js-actions-panel-sharing, .panel-sharing');
-  actionsRow.insertBefore(element, sharingAction);
-  const vueInstance = mountVueComponent(element, notes, identifiers);
-  console.log('Vue component mounted.');
-  return vueInstance;
+  const sharingAction = actionsPanel.querySelector('.js-actions-panel-sharing, .panel-sharing');
+  actionsPanel.insertBefore(element, sharingAction);
+  return mountVueComponent(element, notes, identifiers);
 }
 
 function setupButtonListeners(notes: { [key: string]: string }) {
-  let vueInstance: FilmWrapperInstance | null = null;
-  let observer: MutationObserver | null = null;
-  let attempts = 0;
-  const maxAttempts = 20;
+  let mountedEditor: MountedEditor | null = null;
+  let synchronizationQueued = false;
 
   const synchronize = () => {
     const actionsPanel = findActionsPanel();
-    const watchlistControl = actionsPanel
-      ? findWatchlistControl(actionsPanel)
-      : null;
+
+    if (
+      mountedEditor &&
+      (!mountedEditor.element.isConnected || !actionsPanel?.contains(mountedEditor.element))
+    ) {
+      mountedEditor.app.unmount();
+      mountedEditor = null;
+    }
+
+    const watchlistControl = actionsPanel ? findWatchlistControl(actionsPanel) : null;
     const identifiers = getProductionIdentifiers(document, watchlistControl);
 
     if (!actionsPanel || !watchlistControl || !identifiers) {
-      return false;
+      return;
     }
 
-    if (!vueInstance) {
-      vueInstance = insertVueComponentIntoPage(notes, identifiers);
+    if (!mountedEditor) {
+      actionsPanel.querySelector('[data-watchlist-notes-extension="editor"]')?.remove();
+      mountedEditor = insertVueComponentIntoPage(actionsPanel, notes, identifiers);
     }
 
     const isInWatchlist = getWatchlistState(watchlistControl);
     if (isInWatchlist === true) {
-      vueInstance.show();
+      mountedEditor.instance.show();
     } else if (isInWatchlist === false) {
-      vueInstance.hide();
+      mountedEditor.instance.hide();
     } else {
       console.warn('Could not determine the current Letterboxd watchlist state.');
-      vueInstance.hide();
+      mountedEditor.instance.hide();
     }
-
-    if (!observer) {
-      const userPanel = actionsPanel.closest('#userpanel') ?? actionsPanel;
-      observer = new MutationObserver(synchronize);
-      observer.observe(userPanel, {
-        attributes: true,
-        attributeFilter: [
-          'aria-label',
-          'aria-pressed',
-          'class',
-          'data-in-watchlist',
-          'data-is-in-watchlist',
-          'title',
-        ],
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-    }
-
-    return true;
   };
 
-  if (synchronize()) {
-    return;
-  }
-
-  const interval = window.setInterval(() => {
-    attempts += 1;
-    if (synchronize()) {
-      window.clearInterval(interval);
-    } else if (attempts >= maxAttempts) {
-      window.clearInterval(interval);
-      console.error('Letterboxd watchlist control or production identifiers not found.');
+  const queueSynchronization = () => {
+    if (synchronizationQueued) {
+      return;
     }
-  }, 500);
+
+    synchronizationQueued = true;
+    queueMicrotask(() => {
+      synchronizationQueued = false;
+      synchronize();
+    });
+  };
+
+  const observer = new MutationObserver(queueSynchronization);
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: [
+      'aria-label',
+      'aria-pressed',
+      'class',
+      'data-in-watchlist',
+      'data-is-in-watchlist',
+      'title',
+    ],
+    childList: true,
+    subtree: true,
+  });
+  synchronize();
 }
 
 export function initializeFilmPage(notes: { [key: string]: string }) {
-  console.log('Document state:', document.readyState);
-  if (document.readyState === "loading") {
-    document.addEventListener('DOMContentLoaded', () => setupButtonListeners(notes));
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setupButtonListeners(notes), {
+      once: true,
+    });
   } else {
     setupButtonListeners(notes);
   }

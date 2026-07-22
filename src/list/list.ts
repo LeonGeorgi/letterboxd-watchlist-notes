@@ -1,16 +1,11 @@
 import { createApp } from 'vue';
 import type { App } from 'vue';
 import SetNoteListButton from './SetNoteListButton.vue';
-import {
-  findListActions,
-  findListActionsPanel,
-  getListSlug,
-} from './list-dom';
+import { findListActions, findListActionsPanel, getListSlug } from './list-dom';
 
 const EXTENSION_ROOT_ATTRIBUTE = 'data-watchlist-notes-extension';
 
 export function initializeList() {
-  console.log('List page initialized.');
   const listId = getListSlug();
   if (!listId) {
     console.error('Could not determine the Letterboxd list slug.');
@@ -18,58 +13,50 @@ export function initializeList() {
   }
 
   let app: App<Element> | null = null;
-  let observer: MutationObserver | null = null;
-  let attempts = 0;
-  const maxAttempts = 20;
+  let mountedElement: HTMLElement | null = null;
+  let synchronizationQueued = false;
 
-  const mountButton = (panel: HTMLElement) => {
-    const actions = findListActions(panel);
+  const synchronize = () => {
+    const panel = findListActionsPanel();
+    const actions = panel ? findListActions(panel) : null;
+
+    if (mountedElement && (!mountedElement.isConnected || !actions?.contains(mountedElement))) {
+      app?.unmount();
+      app = null;
+      mountedElement = null;
+    }
+
     if (!actions) {
-      return false;
+      return;
     }
 
-    const existingRoot = actions.querySelector(
-      `[${EXTENSION_ROOT_ATTRIBUTE}="list-selector"]`,
-    );
-    if (existingRoot) {
-      return true;
+    const existingRoot = actions.querySelector(`[${EXTENSION_ROOT_ATTRIBUTE}="list-selector"]`);
+    if (existingRoot === mountedElement) {
+      return;
     }
 
-    app?.unmount();
+    existingRoot?.remove();
     const element = document.createElement('li');
     element.setAttribute(EXTENSION_ROOT_ATTRIBUTE, 'list-selector');
     actions.appendChild(element);
     app = createApp(SetNoteListButton, { listId });
     app.mount(element);
-    console.log('Watchlist notes list selector mounted.');
-    return true;
+    mountedElement = element;
   };
 
-  const initializePanel = () => {
-    const panel = findListActionsPanel();
-    if (!panel) {
-      return false;
+  const queueSynchronization = () => {
+    if (synchronizationQueued) {
+      return;
     }
 
-    if (!observer) {
-      observer = new MutationObserver(() => mountButton(panel));
-      observer.observe(panel, { childList: true, subtree: true });
-    }
-
-    return mountButton(panel);
+    synchronizationQueued = true;
+    queueMicrotask(() => {
+      synchronizationQueued = false;
+      synchronize();
+    });
   };
 
-  if (initializePanel()) {
-    return;
-  }
-
-  const interval = window.setInterval(() => {
-    attempts += 1;
-    if (initializePanel()) {
-      window.clearInterval(interval);
-    } else if (attempts >= maxAttempts) {
-      window.clearInterval(interval);
-      console.error('Letterboxd list actions did not become available.');
-    }
-  }, 500);
+  const observer = new MutationObserver(queueSynchronization);
+  observer.observe(document.body, { childList: true, subtree: true });
+  synchronize();
 }

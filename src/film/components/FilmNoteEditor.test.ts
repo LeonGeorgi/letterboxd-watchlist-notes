@@ -2,18 +2,19 @@
 
 import { createApp, nextTick, type App } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { saveNoteSync } from '../../util/storage';
+import { saveNote } from '../../util/storage';
 import FilmNoteEditor from './FilmNoteEditor.vue';
 
 vi.mock('../../util/storage', () => ({
-  getUsernameFromCookies: () => 'leongeorgi',
-  getNoteForFilm: (
-    notes: Record<string, string>,
-    filmId: string,
-    filmSharingId: string,
-  ) => notes[filmId] ?? notes[filmSharingId],
-  invalidateCache: vi.fn(),
-  saveNoteSync: vi.fn().mockResolvedValue(true),
+  getSignedInUsername: () => 'leongeorgi',
+  getNoteForFilm: (notes: Record<string, string>, filmId: string, filmSharingId: string) =>
+    notes[filmId] ?? notes[filmSharingId],
+  saveNote: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('../../util/notes-store', () => ({
+  getConfiguredNoteListId: () => 'watchlist-notes',
+  invalidateNotesCache: vi.fn(),
 }));
 
 describe('FilmNoteEditor', () => {
@@ -45,7 +46,7 @@ describe('FilmNoteEditor', () => {
   function mountEditor() {
     app = createApp(FilmNoteEditor, {
       isVisible: true,
-      notes: { '27256': 'Empfohlen von Sofie (Kyoto)' },
+      notes: { '27256': 'Recommended by Sophie in Kyoto' },
       filmId: '27256',
       filmSharingId: '1UDa',
     });
@@ -56,7 +57,7 @@ describe('FilmNoteEditor', () => {
     mountEditor();
 
     expect(document.querySelector('.note-editor__preview')?.textContent).toContain(
-      'Empfohlen von Sofie (Kyoto)',
+      'Recommended by Sophie in Kyoto',
     );
     expect(document.querySelector('.note-editor__eyebrow')?.textContent).toBe('My note');
     expect(document.querySelector('textarea')).toBeNull();
@@ -75,7 +76,7 @@ describe('FilmNoteEditor', () => {
 
     expect(document.querySelector('textarea')).toBeNull();
     expect(document.querySelector('.note-editor__preview')?.textContent).toContain(
-      'Empfohlen von Sofie (Kyoto)',
+      'Recommended by Sophie in Kyoto',
     );
   });
 
@@ -96,7 +97,7 @@ describe('FilmNoteEditor', () => {
     expect(document.querySelector('.note-editor__preview')?.textContent).toContain(
       'Updated recommendation',
     );
-    expect(saveNoteSync).toHaveBeenCalledWith(
+    expect(saveNote).toHaveBeenCalledWith(
       'Updated recommendation',
       '27256',
       '1UDa',

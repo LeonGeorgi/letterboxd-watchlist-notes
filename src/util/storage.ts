@@ -1,4 +1,4 @@
-export function getUsernameFromCookies() {
+export function getSignedInUsername() {
   const encodedUsername = document.cookie.match(
     /(?:^|;\s*)letterboxd\.signed\.in\.as=([^;]+)/,
   )?.[1];
@@ -71,6 +71,51 @@ function getEntryIdentifiers(entry: Element) {
   return keys;
 }
 
+const NOTE_BLOCK_ELEMENTS = new Set([
+  'BLOCKQUOTE',
+  'DIV',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'LI',
+  'OL',
+  'P',
+  'PRE',
+  'UL',
+]);
+
+function serializeNoteNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? '';
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return '';
+  }
+
+  const element = node as Element;
+  if (element.tagName === 'BR') {
+    return '\n';
+  }
+
+  const content = Array.from(element.childNodes).map(serializeNoteNode).join('');
+  return NOTE_BLOCK_ELEMENTS.has(element.tagName) && content.trim() ? `\n${content}\n` : content;
+}
+
+function getFormattedNoteText(element: Element) {
+  return Array.from(element.childNodes)
+    .map(serializeNoteNode)
+    .join('')
+    .replaceAll('\u00a0', ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function getEntryNote(entry: Element) {
   const noteElement = entry.querySelector<HTMLElement | HTMLInputElement | HTMLTextAreaElement>(
     '.notes, .list-entry-notes, textarea[name="notes"], input[name="notes"], [data-list-entry-notes]',
@@ -83,7 +128,8 @@ function getEntryNote(entry: Element) {
     return noteElement.value.trim();
   }
 
-  return (noteElement.getAttribute('data-list-entry-notes') ?? noteElement.textContent ?? '').trim();
+  const serializedNote = noteElement.getAttribute('data-list-entry-notes');
+  return serializedNote?.trim() ?? getFormattedNoteText(noteElement);
 }
 
 /**
@@ -153,8 +199,10 @@ export type ListUpdateRequest = {
 };
 
 function inputValue(doc: ParentNode, selector: string) {
-  return doc.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(selector)
-    ?.value ?? '';
+  return (
+    doc.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(selector)
+      ?.value ?? ''
+  );
 }
 
 function getCsrfToken(doc: Document, form: ParentNode) {
@@ -198,22 +246,23 @@ export function buildListUpdateRequest(
 
   const entries = Array.from(form.querySelectorAll('#list-items li.film-list-entry'));
   const filmKeys = new Set(getFilmKeys(filmId, filmSharingId));
-  const position = entries.findIndex((entry) => (
-    [...getEntryIdentifiers(entry)].some((identifier) => filmKeys.has(identifier))
-  ));
-  const change: ListEntryChange = position >= 0
-    ? {
-        action: 'UPDATE',
-        position,
-        notes: note,
-        containsSpoilers: false,
-      }
-    : {
-        action: 'ADD',
-        listable: filmSharingId,
-        notes: note,
-        containsSpoilers: false,
-      };
+  const position = entries.findIndex((entry) =>
+    [...getEntryIdentifiers(entry)].some((identifier) => filmKeys.has(identifier)),
+  );
+  const change: ListEntryChange =
+    position >= 0
+      ? {
+          action: 'UPDATE',
+          position,
+          notes: note,
+          containsSpoilers: false,
+        }
+      : {
+          action: 'ADD',
+          listable: filmSharingId,
+          notes: note,
+          containsSpoilers: false,
+        };
   const version = Number(versionValue);
 
   return {
@@ -226,8 +275,9 @@ export function buildListUpdateRequest(
       sharePolicy: sharing === 'Public' ? 'You' : sharing,
       ranked: form.querySelector<HTMLInputElement>('input[name="numberedList"]')?.checked ?? false,
       description: inputValue(form, 'textarea[name="notes"]'),
-      tags: Array.from(form.querySelectorAll<HTMLInputElement>('input[name="tag"]'))
-        .map((tag) => tag.value),
+      tags: Array.from(form.querySelectorAll<HTMLInputElement>('input[name="tag"]')).map(
+        (tag) => tag.value,
+      ),
       entries: [change],
     },
   };
@@ -237,13 +287,13 @@ type ListUpdateResponse = {
   messages?: Array<{ type?: string; title?: string }>;
 };
 
-export async function saveNoteSync(
+export async function saveNote(
   note: string,
   filmId: string,
   filmSharingId: string,
   listId: string,
 ): Promise<boolean> {
-  const username = getUsernameFromCookies();
+  const username = getSignedInUsername();
   if (!username) {
     console.error('Could not determine the signed-in Letterboxd username.');
     return false;
@@ -279,7 +329,9 @@ export async function saveNoteSync(
         body: JSON.stringify(request.update),
       },
     );
-    const responseBody = await updateResponse.json().catch(() => null) as ListUpdateResponse | null;
+    const responseBody = (await updateResponse
+      .json()
+      .catch(() => null)) as ListUpdateResponse | null;
     const errorMessage = responseBody?.messages?.find((message) => message.type === 'Error');
     if (!updateResponse.ok || errorMessage) {
       console.error(
@@ -290,7 +342,6 @@ export async function saveNoteSync(
       return false;
     }
 
-    console.log('Note saved successfully.');
     return true;
   } catch (error) {
     console.error('Could not save note:', error);
@@ -298,8 +349,8 @@ export async function saveNoteSync(
   }
 }
 
-export async function getAllNotesSync(noteListId: string): Promise<Notes> {
-  const username = getUsernameFromCookies();
+export async function fetchAllNotes(noteListId: string): Promise<Notes> {
+  const username = getSignedInUsername();
   if (!username) {
     throw new Error('Could not determine the signed-in Letterboxd username.');
   }
@@ -326,28 +377,14 @@ export async function getAllNotesSync(noteListId: string): Promise<Notes> {
 
     const nextHref = doc.querySelector<HTMLAnchorElement>('a.next[href]')?.getAttribute('href');
     const candidateUrl: URL | null = nextHref ? new URL(nextHref, currentUrl) : null;
-    nextUrl = candidateUrl
-      && candidateUrl.origin === listUrl.origin
-      && candidateUrl.pathname.startsWith(listUrl.pathname)
-      && !visitedUrls.has(candidateUrl.href)
-      ? candidateUrl
-      : null;
+    nextUrl =
+      candidateUrl &&
+      candidateUrl.origin === listUrl.origin &&
+      candidateUrl.pathname.startsWith(listUrl.pathname) &&
+      !visitedUrls.has(candidateUrl.href)
+        ? candidateUrl
+        : null;
   }
 
-  console.log('Loaded watchlist notes:', notes);
   return notes;
-}
-
-export function invalidateCache() {
-  const notesFromLocalStorage = localStorage.getItem('notes');
-  if (notesFromLocalStorage) {
-    try {
-      const { notes, date, version } = JSON.parse(notesFromLocalStorage);
-      localStorage.setItem('notes', JSON.stringify({ notes, cacheValid: false, date, version }));
-      console.log('Cache invalidated.');
-    } catch (error) {
-      localStorage.removeItem('notes');
-      console.warn('Removed an invalid notes cache.', error);
-    }
-  }
 }

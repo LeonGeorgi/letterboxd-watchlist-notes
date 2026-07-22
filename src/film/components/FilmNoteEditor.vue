@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import {
-  getUsernameFromCookies,
-  getNoteForFilm,
-  invalidateCache,
-  saveNoteSync,
-} from '../../util/storage';
+import { getSignedInUsername, getNoteForFilm, saveNote } from '../../util/storage';
+import { getConfiguredNoteListId, invalidateNotesCache } from '../../util/notes-store';
 import { nextTick, ref } from 'vue';
 
 const props = defineProps<{
-  isVisible: boolean,
-  notes: { [key: string]: string },
-  filmId: string,
-  filmSharingId: string,
+  isVisible: boolean;
+  notes: { [key: string]: string };
+  filmId: string;
+  filmSharingId: string;
 }>();
 
-const noteListId: string | null = localStorage.getItem('noteList');
+const noteListId = getConfiguredNoteListId();
 
 const initialNote = getNoteForFilm(props.notes, props.filmId, props.filmSharingId) ?? '';
 const savedContent = ref(initialNote);
@@ -24,13 +20,14 @@ const isEditing = ref(false);
 const performingSave = ref(false);
 const saveState = ref<'idle' | 'saved' | 'error'>('idle');
 
-const username = getUsernameFromCookies();
+const username = getSignedInUsername();
 const listsUrl = username
   ? `https://letterboxd.com/${encodeURIComponent(username)}/lists/`
   : 'https://letterboxd.com/lists/';
-const noteListUrl = username && noteListId
-  ? `https://letterboxd.com/${encodeURIComponent(username)}/list/${encodeURIComponent(noteListId)}/`
-  : listsUrl;
+const noteListUrl =
+  username && noteListId
+    ? `https://letterboxd.com/${encodeURIComponent(username)}/list/${encodeURIComponent(noteListId)}/`
+    : listsUrl;
 
 function setTextareaContent(event: Event) {
   const target = event.target as HTMLTextAreaElement;
@@ -43,10 +40,7 @@ async function startEditing() {
   isEditing.value = true;
   await nextTick();
   textarea.value?.focus();
-  textarea.value?.setSelectionRange(
-    textarea.value.value.length,
-    textarea.value.value.length,
-  );
+  textarea.value?.setSelectionRange(textarea.value.value.length, textarea.value.value.length);
 }
 
 function cancelEditing() {
@@ -64,15 +58,14 @@ async function save() {
   saveState.value = 'idle';
 
   if (noteListId) {
-    const success = await saveNoteSync(
+    const success = await saveNote(
       textareaContent.value,
       props.filmId,
       props.filmSharingId,
       noteListId,
     );
     if (success) {
-      console.log('Saved note:', textareaContent.value);
-      invalidateCache();
+      invalidateNotesCache();
       savedContent.value = textareaContent.value;
       saveState.value = 'saved';
       isEditing.value = false;
@@ -96,7 +89,8 @@ async function save() {
           class="note-editor__list-link note-editor__list-link--summary"
           :href="noteListUrl"
           title="Open the watchlist notes list"
-        >List entry</a>
+          >List entry</a
+        >
         <button
           class="note-editor__summary-button"
           type="button"
@@ -107,12 +101,14 @@ async function save() {
           <span
             class="note-editor__preview"
             :class="{ 'note-editor__preview--empty': !savedContent }"
-          >{{ savedContent || 'Add a note…' }}</span>
+            >{{ savedContent || 'Add a note…' }}</span
+          >
           <span
             class="note-editor__edit-indicator"
             :class="{ 'note-editor__edit-indicator--saved': saveState === 'saved' }"
             aria-hidden="true"
-          >{{ saveState === 'saved' ? 'Saved' : 'Edit' }}</span>
+            >{{ saveState === 'saved' ? 'Saved' : 'Edit' }}</span
+          >
         </button>
         <span class="sr-only" role="status" aria-live="polite">
           {{ saveState === 'saved' ? 'Saved' : '' }}
@@ -126,7 +122,8 @@ async function save() {
             class="note-editor__list-link"
             :href="noteListUrl"
             title="Open the watchlist notes list"
-          >List entry</a>
+            >List entry</a
+          >
         </header>
 
         <textarea
@@ -158,7 +155,9 @@ async function save() {
               type="button"
               :disabled="performingSave"
               @click="cancelEditing"
-            >Cancel</button>
+            >
+              Cancel
+            </button>
             <button
               class="button button-action note-editor__save"
               type="button"
@@ -174,15 +173,13 @@ async function save() {
 
     <div v-else class="note-editor__empty">
       <strong>No note list configured</strong>
-      <span>
-        <a :href="listsUrl">Open your lists</a> and choose “Use for watchlist notes”.
-      </span>
+      <span> <a :href="listsUrl">Open your lists</a> and choose “Use for watchlist notes”. </span>
     </div>
   </section>
 </template>
 
 <style scoped>
-:global(li[data-watchlist-notes-extension="editor"]) {
+:global(li[data-watchlist-notes-extension='editor']) {
   padding: 0 !important;
 }
 
@@ -191,13 +188,7 @@ async function save() {
   width: 100%;
   background: #456;
   color: #bcd;
-  font-family: var(
-    --font-stack-graphik,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--font-stack-graphik, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   text-align: left;
 }
 
@@ -241,6 +232,7 @@ async function save() {
   font-size: 14px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  white-space: pre-line;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }

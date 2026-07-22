@@ -1,76 +1,42 @@
 import { initializeFilmPage } from './film/film';
-import { getAllNotesSync, type Notes } from './util/storage';
+import { getConfiguredNoteListId, readNotesCache, writeNotesCache } from './util/notes-store';
+import { fetchAllNotes, getSignedInUsername, type Notes } from './util/storage';
 import { initializeList } from './list/list';
+import { initializeWatchlist } from './watchlist/watchlist';
+import { isWatchlistPath } from './watchlist/watchlist-dom';
 
-const NOTES_CACHE_VERSION = 2;
+type NotesInitializer = (notes: Notes) => void;
 
-function initializeWithFetchedNotes(noteListId: string) {
-  getAllNotesSync(noteListId).then((notes) => {
-    localStorage.setItem('notes', JSON.stringify({
-      version: NOTES_CACHE_VERSION,
-      notes,
-      cacheValid: true,
-      date: new Date(),
-    }));
-    initializeFilmPage(notes);
-  }).catch((error) => {
-    console.error('Error fetching notes:', error);
-    initializeFilmPage({});
-  });
-}
-
-function readCachedNotes(): Notes | null {
-  const serializedCache = localStorage.getItem('notes');
-  if (!serializedCache) {
-    return null;
-  }
-
+async function initializeWithFetchedNotes(
+  noteListId: string,
+  username: string,
+  initialize: NotesInitializer,
+) {
   try {
-    const cache = JSON.parse(serializedCache) as {
-      notes?: unknown;
-      cacheValid?: unknown;
-      date?: unknown;
-      version?: unknown;
-    };
-    const cacheDate = typeof cache.date === 'string'
-      ? new Date(cache.date)
-      : null;
-    const cacheAge = cacheDate
-      ? Date.now() - cacheDate.getTime()
-      : Number.POSITIVE_INFINITY;
-    const isFresh = cacheAge < 24 * 60 * 60 * 1000;
-
-    if (
-      cache.version === NOTES_CACHE_VERSION
-      && cache.cacheValid === true
-      && isFresh
-      && cache.notes !== null
-      && typeof cache.notes === 'object'
-    ) {
-      return cache.notes as Notes;
-    }
+    const notes = await fetchAllNotes(noteListId);
+    writeNotesCache({ listId: noteListId, username }, notes);
+    initialize(notes);
   } catch (error) {
-    console.warn('Ignoring invalid notes cache.', error);
+    console.error('Error fetching notes:', error);
+    initialize({});
   }
-
-  return null;
 }
 
-function initializeFilm() {
-  const noteListId = localStorage.getItem('noteList');
-  if (!noteListId) {
-    initializeFilmPage({});
+function initializeNotesPage(initialize: NotesInitializer) {
+  const noteListId = getConfiguredNoteListId();
+  const username = getSignedInUsername();
+  if (!noteListId || !username) {
+    initialize({});
     return;
   }
 
-  const cachedNotes = readCachedNotes();
+  const cachedNotes = readNotesCache({ listId: noteListId, username });
   if (cachedNotes) {
-    console.log('Using cached watchlist notes.');
-    initializeFilmPage(cachedNotes);
+    initialize(cachedNotes);
     return;
   }
 
-  initializeWithFetchedNotes(noteListId);
+  initializeWithFetchedNotes(noteListId, username, initialize);
 }
 
 const { hostname, pathname } = window.location;
@@ -79,6 +45,8 @@ if (hostname === 'letterboxd.com') {
     // List selection must never be blocked by loading the configured note list.
     initializeList();
   } else if (pathname.startsWith('/film/')) {
-    initializeFilm();
+    initializeNotesPage(initializeFilmPage);
+  } else if (isWatchlistPath(pathname)) {
+    initializeNotesPage(initializeWatchlist);
   }
 }

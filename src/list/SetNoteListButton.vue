@@ -1,38 +1,36 @@
 <script setup lang="ts">
-import { invalidateCache } from '../util/storage';
+import {
+  clearConfiguredNoteListId,
+  getConfiguredNoteListId,
+  setConfiguredNoteListId,
+} from '../util/notes-store';
 import { ref } from 'vue';
 
 const props = defineProps<{ listId: string }>();
-const noteListId = ref(localStorage.getItem('noteList'));
+const noteListId = ref(getConfiguredNoteListId());
 
 function setNoteList() {
-  localStorage.setItem('noteList', props.listId);
+  setConfiguredNoteListId(props.listId);
   noteListId.value = props.listId;
-  invalidateCache();
-  console.log('Set note list ID:', props.listId);
 }
 
 function unsetNoteList() {
-  localStorage.removeItem('noteList');
+  clearConfiguredNoteListId();
   noteListId.value = null;
-  invalidateCache();
-  console.log('Unset note list ID');
 }
 </script>
 
 <template>
-  <a v-if="listId !== noteListId" href="#" class="js-form-action" @click.prevent="setNoteList" :style="{
-    cursor: 'pointer',
-  }">
+  <a v-if="listId !== noteListId" href="#" class="js-form-action" @click.prevent="setNoteList">
     Use for watchlist notes
   </a>
-  <a v-else href="#" class="js-form-action" @click.prevent="unsetNoteList" :style="{
-    cursor: 'pointer',
-  }">
+  <a v-else href="#" class="js-form-action" @click.prevent="unsetNoteList">
     Don't use for watchlist notes
   </a>
 </template>
 
 <style scoped>
-
+.js-form-action {
+  cursor: pointer;
+}
 </style>

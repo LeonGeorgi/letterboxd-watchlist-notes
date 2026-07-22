@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  findListActions,
-  findListActionsPanel,
-  getListSlug,
-} from './list-dom';
+import { findListActions, findListActionsPanel, getListSlug } from './list-dom';
 
 describe('Letterboxd list page DOM', () => {
   beforeEach(() => {
@@ -50,9 +46,7 @@ describe('Letterboxd list page DOM', () => {
   });
 
   it('extracts and decodes the list slug from the pathname', () => {
-    expect(getListSlug('/leongeorgi/list/watchlist%20notes/')).toBe(
-      'watchlist notes',
-    );
+    expect(getListSlug('/leongeorgi/list/watchlist%20notes/')).toBe('watchlist notes');
   });
 
   it('rejects paths that are not Letterboxd list detail pages', () => {

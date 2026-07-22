@@ -26,8 +26,10 @@ function parseBooleanState(value: string | null): boolean | null {
 }
 
 export function findActionsPanel(root: ParentNode = document): HTMLElement | null {
-  return root.querySelector<HTMLElement>('#userpanel .js-actions-panel')
-    ?? root.querySelector<HTMLElement>('#userpanel ul');
+  return (
+    root.querySelector<HTMLElement>('#userpanel .js-actions-panel') ??
+    root.querySelector<HTMLElement>('#userpanel ul')
+  );
 }
 
 export function findWatchlistControl(panel: ParentNode): HTMLElement | null {
@@ -47,15 +49,20 @@ export function findWatchlistControl(panel: ParentNode): HTMLElement | null {
     }
   }
 
-  return Array.from(panel.querySelectorAll<HTMLElement>('a, button')).find((control) => {
-    const accessibleText = [
-      control.getAttribute('aria-label'),
-      control.getAttribute('title'),
-      control.textContent,
-    ].filter(Boolean).join(' ').toLowerCase();
+  return (
+    Array.from(panel.querySelectorAll<HTMLElement>('a, button')).find((control) => {
+      const accessibleText = [
+        control.getAttribute('aria-label'),
+        control.getAttribute('title'),
+        control.textContent,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-    return accessibleText.includes('watchlist');
-  }) ?? null;
+      return accessibleText.includes('watchlist');
+    }) ?? null
+  );
 }
 
 export function getWatchlistState(control: HTMLElement): boolean | null {
@@ -77,7 +84,11 @@ export function getWatchlistState(control: HTMLElement): boolean | null {
     control.getAttribute('aria-label'),
     control.getAttribute('title'),
     control.textContent,
-  ].filter(Boolean).join(' ').trim().toLowerCase();
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+    .toLowerCase();
 
   if (accessibleText.includes('remove') && accessibleText.includes('watchlist')) {
     return true;
@@ -102,12 +113,9 @@ function parseProductionMeta(root: ParentNode): Partial<ProductionIdentifiers> {
 
   try {
     const identifier = JSON.parse(content) as { lid?: unknown; uid?: unknown };
-    const filmId = typeof identifier.uid === 'string'
-      ? identifier.uid.match(/^film:(\d+)$/)?.[1]
-      : undefined;
-    const filmSharingId = typeof identifier.lid === 'string'
-      ? identifier.lid
-      : undefined;
+    const filmId =
+      typeof identifier.uid === 'string' ? identifier.uid.match(/^film:(\d+)$/)?.[1] : undefined;
+    const filmSharingId = typeof identifier.lid === 'string' ? identifier.lid : undefined;
 
     return { filmId, filmSharingId };
   } catch (error) {
@@ -126,20 +134,14 @@ export function getProductionIdentifiers(
     '#userpanel input[readonly][value*="boxd.it/"]',
   );
   const sharingUrl = sharingInput?.value || sharingInput?.getAttribute('value') || '';
-  const controlIdentifier = /^\d+$/.test(controlFilmId ?? '')
-    ? controlFilmId
-    : undefined;
-  const sharingInputIdentifier = sharingInput?.id.match(
-    /^url-field-film-(\d+)$/,
-  )?.[1];
+  const controlIdentifier = /^\d+$/.test(controlFilmId ?? '') ? controlFilmId : undefined;
+  const sharingInputIdentifier = sharingInput?.id.match(/^url-field-film-(\d+)$/)?.[1];
 
-  const filmId = [
-    fromMeta.filmId,
-    controlIdentifier,
-    sharingInputIdentifier,
-  ].find((identifier): identifier is string => Boolean(identifier));
-  const filmSharingId = fromMeta.filmSharingId
-    ?? sharingUrl.match(/^https:\/\/boxd\.it\/([^/?#]+)/)?.[1];
+  const filmId = [fromMeta.filmId, controlIdentifier, sharingInputIdentifier].find(
+    (identifier): identifier is string => Boolean(identifier),
+  );
+  const filmSharingId =
+    fromMeta.filmSharingId ?? sharingUrl.match(/^https:\/\/boxd\.it\/([^/?#]+)/)?.[1];
 
   if (!filmId || !filmSharingId) {
     return null;

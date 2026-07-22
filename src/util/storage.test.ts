@@ -3,12 +3,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildListUpdateRequest,
-  getAllNotesSync,
+  fetchAllNotes,
   getNoteForFilm,
-  getUsernameFromCookies,
+  getSignedInUsername,
   notesContainFilm,
   parseNotesDocument,
-  saveNoteSync,
+  saveNote,
 } from './storage';
 
 afterEach(() => {
@@ -23,19 +23,20 @@ describe('Letterboxd session cookie', () => {
   it('reads the username when the cookie is the final cookie', () => {
     document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
 
-    expect(getUsernameFromCookies()).toBe('leongeorgi');
+    expect(getSignedInUsername()).toBe('leongeorgi');
   });
 
   it('decodes an encoded username', () => {
     document.cookie = 'letterboxd.signed.in.as=Leon%20Georgi; Path=/';
 
-    expect(getUsernameFromCookies()).toBe('Leon Georgi');
+    expect(getSignedInUsername()).toBe('Leon Georgi');
   });
 });
 
 describe('watchlist note parsing', () => {
   it('reads current detail-list markup under every stable film identifier', () => {
-    const doc = new DOMParser().parseFromString(`
+    const doc = new DOMParser().parseFromString(
+      `
       <article class="list-detailed-entry">
         <div
           data-item-slug="adventure-time-stakes"
@@ -43,7 +44,9 @@ describe('watchlist note parsing', () => {
         ></div>
         <div class="notes"><p>Adventure Time</p></div>
       </article>
-    `, 'text/html');
+    `,
+      'text/html',
+    );
 
     expect(parseNotesDocument(doc)).toEqual({
       '781606': 'Adventure Time',
@@ -54,11 +57,14 @@ describe('watchlist note parsing', () => {
   });
 
   it('keeps films without notes so saving updates instead of adding a duplicate', () => {
-    const doc = new DOMParser().parseFromString(`
+    const doc = new DOMParser().parseFromString(
+      `
       <article class="list-detailed-entry">
         <div data-postered-identifier='{"lid":"18U8","uid":"film:27256"}'></div>
       </article>
-    `, 'text/html');
+    `,
+      'text/html',
+    );
 
     const notes = parseNotesDocument(doc);
 
@@ -67,7 +73,8 @@ describe('watchlist note parsing', () => {
   });
 
   it('still reads the former editor markup and textarea values', () => {
-    const doc = new DOMParser().parseFromString(`
+    const doc = new DOMParser().parseFromString(
+      `
       <div id="list-items-editor">
         <ul id="list-items">
           <li class="film-list-entry" data-film-id="27256">
@@ -76,9 +83,25 @@ describe('watchlist note parsing', () => {
           </li>
         </ul>
       </div>
-    `, 'text/html');
+    `,
+      'text/html',
+    );
 
     expect(parseNotesDocument(doc)['27256']).toBe('A private note');
+  });
+
+  it('preserves line breaks and paragraphs from Letterboxd note markup', () => {
+    const doc = new DOMParser().parseFromString(
+      `
+      <article class="list-detailed-entry">
+        <div data-postered-identifier='{"lid":"1UDa","uid":"film:27256"}'></div>
+        <div class="notes"><p>First line<br>Second line</p><p>Second paragraph</p></div>
+      </article>
+    `,
+      'text/html',
+    );
+
+    expect(parseNotesDocument(doc)['27256']).toBe('First line\nSecond line\n\nSecond paragraph');
   });
 
   it('finds a note by numeric UID or Letterboxd LID', () => {
@@ -88,23 +111,34 @@ describe('watchlist note parsing', () => {
 
   it('loads the current detail view and follows list pagination', async () => {
     document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(`
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          `
         <article class="list-detailed-entry">
           <div data-postered-identifier='{"lid":"18U8","uid":"film:27256"}'></div>
           <div class="notes">First note</div>
         </article>
         <a class="next" href="/leongeorgi/list/watchlist-notes/detail/page/2/">Next</a>
-      `, { status: 200 }))
-      .mockResolvedValueOnce(new Response(`
+      `,
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          `
         <article class="list-detailed-entry">
           <div data-postered-identifier='{"lid":"2aH8","uid":"film:51777"}'></div>
           <div class="notes">Second note</div>
         </article>
-      `, { status: 200 }));
+      `,
+          { status: 200 },
+        ),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    const notes = await getAllNotesSync('watchlist-notes');
+    const notes = await fetchAllNotes('watchlist-notes');
 
     expect(notes['27256']).toBe('First note');
     expect(notes['2aH8']).toBe('Second note');
@@ -147,7 +181,7 @@ describe('watchlist note saving', () => {
   it('builds the current Letterboxd PATCH for an existing film', () => {
     const doc = new DOMParser().parseFromString(editorHtml, 'text/html');
 
-    expect(buildListUpdateRequest(doc, 'New note', '27256', '1UDa')).toEqual({
+    expect(buildListUpdateRequest(doc, 'First line\nSecond line', '27256', '1UDa')).toEqual({
       csrf: 'csrf-token',
       listLid: 'km1lk',
       update: {
@@ -158,59 +192,65 @@ describe('watchlist note saving', () => {
         ranked: false,
         description: 'List description',
         tags: ['recommendations'],
-        entries: [{
-          action: 'UPDATE',
-          position: 0,
-          notes: 'New note',
-          containsSpoilers: false,
-        }],
+        entries: [
+          {
+            action: 'UPDATE',
+            position: 0,
+            notes: 'First line\nSecond line',
+            containsSpoilers: false,
+          },
+        ],
       },
     });
   });
 
-  it('uses ADD with Letterboxd\'s listable LID for a new film', () => {
+  it("uses ADD with Letterboxd's listable LID for a new film", () => {
     const doc = new DOMParser().parseFromString(editorHtml, 'text/html');
     const request = buildListUpdateRequest(doc, 'New film note', '99999', 'abcd');
 
-    expect(request?.update.entries).toEqual([{
-      action: 'ADD',
-      listable: 'abcd',
-      notes: 'New film note',
-      containsSpoilers: false,
-    }]);
+    expect(request?.update.entries).toEqual([
+      {
+        action: 'ADD',
+        listable: 'abcd',
+        notes: 'New film note',
+        containsSpoilers: false,
+      },
+    ]);
   });
 
-  it('sends the update to Letterboxd\'s current list API with CSRF protection', async () => {
+  it("sends the update to Letterboxd's current list API with CSRF protection", async () => {
     document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(new Response(editorHtml, { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [], data: {} }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messages: [], data: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveNoteSync('Saved note', '27256', '1UDa', 'watchlist-notes'))
-      .resolves.toBe(true);
+    await expect(saveNote('Saved note', '27256', '1UDa', 'watchlist-notes')).resolves.toBe(true);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((fetchMock.mock.calls[0]?.[0] as URL).href).toBe(
       'https://letterboxd.com/leongeorgi/list/watchlist-notes/edit/',
     );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      'https://letterboxd.com/api/v0/list/km1lk',
-    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://letterboxd.com/api/v0/list/km1lk');
     const updateOptions = fetchMock.mock.calls[1]?.[1] as RequestInit;
     expect(updateOptions.method).toBe('PATCH');
     expect(updateOptions.headers).toEqual({
       'Content-Type': 'application/json; charset=UTF-8',
       'X-CSRF-TOKEN': 'csrf-token',
     });
-    expect(JSON.parse(updateOptions.body as string).entries).toEqual([{
-      action: 'UPDATE',
-      position: 0,
-      notes: 'Saved note',
-      containsSpoilers: false,
-    }]);
+    expect(JSON.parse(updateOptions.body as string).entries).toEqual([
+      {
+        action: 'UPDATE',
+        position: 0,
+        notes: 'Saved note',
+        containsSpoilers: false,
+      },
+    ]);
   });
 });

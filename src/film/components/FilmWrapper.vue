@@ -3,7 +3,7 @@ import { defineComponent, ref } from 'vue';
 import FilmNoteEditor from './FilmNoteEditor.vue';
 
 export default defineComponent({
-  name: 'AddedElement',
+  name: 'FilmWrapper',
   components: { FilmNoteEditor },
   props: {
     notes: {
@@ -35,18 +35,15 @@ export default defineComponent({
       show,
       hide,
     };
-  }
+  },
 });
 </script>
 
 <template>
   <FilmNoteEditor
-    :isVisible="isVisible"
+    :is-visible="isVisible"
     :notes="notes"
-    :filmId="filmId"
-    :filmSharingId="filmSharingId"
+    :film-id="filmId"
+    :film-sharing-id="filmSharingId"
   />
 </template>
-
-<style>
-</style>
