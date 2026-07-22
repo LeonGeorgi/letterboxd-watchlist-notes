@@ -1,61 +1,84 @@
 import { initializeFilmPage } from './film/film';
-import { initializeWatchlist } from './watchlist/watchlist';
-import { getAllNotesSync } from './util/storage';
+import { getAllNotesSync, type Notes } from './util/storage';
 import { initializeList } from './list/list';
 
-function initialize(notes: { [key: string]: string }) {
-  console.log(notes);
-  const url = window.location.href;
-  if (url.startsWith('https://letterboxd.com/film/')) {
-    initializeFilmPage(notes);
-  }
-  if (url.match(/https:\/\/letterboxd\.com\/.+\/list\//)) {
-    initializeList(notes);
-  }
-  /*
-  // if url is like https://letterboxd.com/[username]/watchlist/, call initializeWatchlist()
-  const regex = /https:\/\/letterboxd\.com\/.+\/watchlist\//;
-  if (regex.test(url)) {
-    initializeWatchlist(notes);
-  }
-   */
-}
-
-// get notes from local storage
-const notesFromLocalStorage = localStorage.getItem('notes');
+const NOTES_CACHE_VERSION = 2;
 
 function initializeWithFetchedNotes(noteListId: string) {
   getAllNotesSync(noteListId).then((notes) => {
-    localStorage.setItem('notes', JSON.stringify({ notes, cacheValid: true, date: new Date() }));
-    initialize(notes);
+    localStorage.setItem('notes', JSON.stringify({
+      version: NOTES_CACHE_VERSION,
+      notes,
+      cacheValid: true,
+      date: new Date(),
+    }));
+    initializeFilmPage(notes);
   }).catch((error) => {
     console.error('Error fetching notes:', error);
+    initializeFilmPage({});
   });
 }
 
-const noteListId = localStorage.getItem('noteList');
-if (!noteListId) {
-  initialize({})
-} else if (notesFromLocalStorage) {
-  const { notes, cacheValid, date } = JSON.parse(notesFromLocalStorage);
-  // if cache is valid and date is less than 1 day old, use notes from local storage
-  if (cacheValid) {
-    const dateNow = new Date();
-    const dateCached = new Date(date);
-    const diffMs = dateNow.getTime() - dateCached.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    if (diffDays < 1) {
-      console.log('Cache is valid. Using notes from local storage.');
-      initialize(notes);
-    } else {
-      console.log('Cache is outdated. Fetching notes from Letterboxd.');
-      initializeWithFetchedNotes(noteListId);
-    }
-  } else {
-    console.log('Cache is invalid. Fetching notes from Letterboxd.');
-    initializeWithFetchedNotes(noteListId);
+function readCachedNotes(): Notes | null {
+  const serializedCache = localStorage.getItem('notes');
+  if (!serializedCache) {
+    return null;
   }
-} else {
-  console.log('Notes not found in local storage. Fetching notes from Letterboxd.');
+
+  try {
+    const cache = JSON.parse(serializedCache) as {
+      notes?: unknown;
+      cacheValid?: unknown;
+      date?: unknown;
+      version?: unknown;
+    };
+    const cacheDate = typeof cache.date === 'string'
+      ? new Date(cache.date)
+      : null;
+    const cacheAge = cacheDate
+      ? Date.now() - cacheDate.getTime()
+      : Number.POSITIVE_INFINITY;
+    const isFresh = cacheAge < 24 * 60 * 60 * 1000;
+
+    if (
+      cache.version === NOTES_CACHE_VERSION
+      && cache.cacheValid === true
+      && isFresh
+      && cache.notes !== null
+      && typeof cache.notes === 'object'
+    ) {
+      return cache.notes as Notes;
+    }
+  } catch (error) {
+    console.warn('Ignoring invalid notes cache.', error);
+  }
+
+  return null;
+}
+
+function initializeFilm() {
+  const noteListId = localStorage.getItem('noteList');
+  if (!noteListId) {
+    initializeFilmPage({});
+    return;
+  }
+
+  const cachedNotes = readCachedNotes();
+  if (cachedNotes) {
+    console.log('Using cached watchlist notes.');
+    initializeFilmPage(cachedNotes);
+    return;
+  }
+
   initializeWithFetchedNotes(noteListId);
+}
+
+const { hostname, pathname } = window.location;
+if (hostname === 'letterboxd.com') {
+  if (/^\/[^/]+\/list\//.test(pathname)) {
+    // List selection must never be blocked by loading the configured note list.
+    initializeList();
+  } else if (pathname.startsWith('/film/')) {
+    initializeFilm();
+  }
 }

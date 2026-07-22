@@ -2,18 +2,14 @@
 import { invalidateCache } from '../util/storage';
 import { ref } from 'vue';
 
-const listId = window.location.href.match(/https:\/\/letterboxd\.com\/[^/]+\/list\/([^/]+)\//)?.[1];
+const props = defineProps<{ listId: string }>();
 const noteListId = ref(localStorage.getItem('noteList'));
 
 function setNoteList() {
-  if (listId) {
-    localStorage.setItem('noteList', listId);
-    noteListId.value = listId;
-    invalidateCache();
-    console.log('Set note list ID:', listId);
-  } else {
-    console.error('Could not find list ID in URL:', window.location.href);
-  }
+  localStorage.setItem('noteList', props.listId);
+  noteListId.value = props.listId;
+  invalidateCache();
+  console.log('Set note list ID:', props.listId);
 }
 
 function unsetNoteList() {
@@ -25,12 +21,12 @@ function unsetNoteList() {
 </script>
 
 <template>
-  <a v-if="listId !== noteListId" class="js-form-action" @click="setNoteList" :style="{
+  <a v-if="listId !== noteListId" href="#" class="js-form-action" @click.prevent="setNoteList" :style="{
     cursor: 'pointer',
   }">
     Use for watchlist notes
   </a>
-  <a v-else class="js-form-action" @click="unsetNoteList" :style="{
+  <a v-else href="#" class="js-form-action" @click.prevent="unsetNoteList" :style="{
     cursor: 'pointer',
   }">
     Don't use for watchlist notes

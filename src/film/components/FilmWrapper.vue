@@ -10,6 +10,14 @@ export default defineComponent({
       type: Object,
       required: true,
     },
+    filmId: {
+      type: String,
+      required: true,
+    },
+    filmSharingId: {
+      type: String,
+      required: true,
+    },
   },
   setup() {
     const isVisible = ref(false);
@@ -32,7 +40,12 @@ export default defineComponent({
 </script>
 
 <template>
-  <FilmNoteEditor :isVisible="isVisible" :notes="notes"/>
+  <FilmNoteEditor
+    :isVisible="isVisible"
+    :notes="notes"
+    :filmId="filmId"
+    :filmSharingId="filmSharingId"
+  />
 </template>
 
 <style>

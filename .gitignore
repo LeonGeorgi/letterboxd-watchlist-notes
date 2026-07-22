@@ -2,6 +2,7 @@ bruno/
 
 # Node modules and dependencies
 node_modules/
+.pnpm-store/
 
 # Vite output directory
 dist/
@@ -40,9 +41,6 @@ coverage
 
 # TypeScript generated files
 *.tsbuildinfo
-
-# TypeScript declaration files
-*.d.ts
 
 # linters
 .eslintcache
