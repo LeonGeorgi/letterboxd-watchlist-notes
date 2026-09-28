@@ -48,10 +48,13 @@
       <tspan x="911" dy="19">Watch after Paprika.</tspan>
       <tspan x="911" dy="19">Best late at night.</tspan>
     </text>
-    <text x="900" y="660" fill="#789" font-size="10">Esc · ⌘↵ to save</text>
-    <text x="1020" y="660" fill="#9ab" font-size="10" font-weight="700">CANCEL</text>
-    <rect x="1051" y="644" width="48" height="25" rx="3" fill="#00ac1c"/>
-    <text x="1075" y="661" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">SAVE</text>
+    <text x="900" y="654" fill="#789" font-size="11">
+      <tspan x="900" dy="0">Esc · ⌘↵</tspan>
+      <tspan x="900" dy="13.2">to save</tspan>
+    </text>
+    <text x="970" y="661" fill="#9ab" font-size="11" font-weight="700" letter-spacing="0.44">CANCEL</text>
+    <rect x="1029" y="644" width="70" height="25" rx="3" fill="#00ac1c"/>
+    <text x="1064" y="661" fill="#ffffff" font-size="11" font-weight="700" letter-spacing="0.825" text-anchor="middle">SAVE</text>
 
     <line x1="884" y1="693" x2="1115" y2="693" stroke="#293848"/>
     <text x="999.5" y="721" fill="#cde" font-size="13" text-anchor="middle">Share</text>
