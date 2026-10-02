@@ -55,4 +55,6 @@ The content script routes pages by responsibility:
 - `src/util/storage.ts` handles Letterboxd list parsing and API requests.
 - `src/util/notes-store.ts` owns local configuration and cache persistence.
 
-Letterboxd does not provide a public API for this workflow. DOM selectors and list request handling are covered by tests, but may need updates when Letterboxd changes its markup or private API.
+Storage uses Letterboxd's internal web endpoints with the existing signed-in session. The editor HTML supplies only the list LID, version and CSRF token; `/s/load-list-entries` supplies notes as NDJSON. Reads require a successful terminal record before any notes are cached. Saving sends a minimal, versioned PATCH to `/api/v0/list/{lid}` containing the film LID and note text, leaving list metadata and spoiler flags untouched. An empty note clears the text while keeping the film in the list. Version conflicts (including errors returned with HTTP 200) keep the user's draft and require a manual retry.
+
+These internal interfaces may change. Reduced fixtures in `src/util/fixtures` cover the React editor bootstrap and entry stream contract; regression tests also cover incomplete streams, unconfirmed saves and version conflicts. When maintaining this integration, check the current web editor and use a separate private test list to verify add, update, clear and unchanged list properties.

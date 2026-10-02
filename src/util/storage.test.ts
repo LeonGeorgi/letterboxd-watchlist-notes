@@ -1,256 +1,222 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  buildListUpdateRequest,
-  fetchAllNotes,
-  getNoteForFilm,
-  getSignedInUsername,
-  notesContainFilm,
-  parseNotesDocument,
-  saveNote,
-} from './storage';
+import editorHtml from './fixtures/list-editor.html?raw';
+import entriesStream from './fixtures/list-entries.ndjson?raw';
+import { fetchAllNotes, getNoteForFilm, getSignedInUsername, saveNote } from './storage';
+
+beforeEach(() => {
+  document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-describe('Letterboxd session cookie', () => {
-  beforeEach(() => {
-    document.cookie = 'letterboxd.signed.in.as=; Max-Age=0; Path=/';
-  });
+function mockRequests(body: string, status = 200, html = editorHtml) {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(html))
+    .mockResolvedValueOnce(new Response(body, { status }));
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
+const savedResponse = JSON.stringify({ data: { id: 'XGJv0', version: 8 }, messages: [] });
+
+describe('Letterboxd session and film identifiers', () => {
   it('reads the username when the cookie is the final cookie', () => {
-    document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
-
     expect(getSignedInUsername()).toBe('leongeorgi');
   });
 
   it('decodes an encoded username', () => {
     document.cookie = 'letterboxd.signed.in.as=Leon%20Georgi; Path=/';
-
     expect(getSignedInUsername()).toBe('Leon Georgi');
   });
-});
 
-describe('watchlist note parsing', () => {
-  it('reads current detail-list markup under every stable film identifier', () => {
-    const doc = new DOMParser().parseFromString(
-      `
-      <article class="list-detailed-entry">
-        <div
-          data-item-slug="adventure-time-stakes"
-          data-postered-identifier='{"lid":"wNju","uid":"film:781606","type":"film"}'
-        ></div>
-        <div class="notes"><p>Adventure Time</p></div>
-      </article>
-    `,
-      'text/html',
-    );
-
-    expect(parseNotesDocument(doc)).toEqual({
-      '781606': 'Adventure Time',
-      'adventure-time-stakes': 'Adventure Time',
-      'film:781606': 'Adventure Time',
-      wNju: 'Adventure Time',
-    });
-  });
-
-  it('keeps films without notes so saving updates instead of adding a duplicate', () => {
-    const doc = new DOMParser().parseFromString(
-      `
-      <article class="list-detailed-entry">
-        <div data-postered-identifier='{"lid":"18U8","uid":"film:27256"}'></div>
-      </article>
-    `,
-      'text/html',
-    );
-
-    const notes = parseNotesDocument(doc);
-
-    expect(notes['27256']).toBe('');
-    expect(notesContainFilm(notes, '27256', '18U8')).toBe(true);
-  });
-
-  it('still reads the former editor markup and textarea values', () => {
-    const doc = new DOMParser().parseFromString(
-      `
-      <div id="list-items-editor">
-        <ul id="list-items">
-          <li class="film-list-entry" data-film-id="27256">
-            <input name="filmId" value="27256">
-            <textarea class="list-entry-notes">A private note</textarea>
-          </li>
-        </ul>
-      </div>
-    `,
-      'text/html',
-    );
-
-    expect(parseNotesDocument(doc)['27256']).toBe('A private note');
-  });
-
-  it('preserves line breaks and paragraphs from Letterboxd note markup', () => {
-    const doc = new DOMParser().parseFromString(
-      `
-      <article class="list-detailed-entry">
-        <div data-postered-identifier='{"lid":"1UDa","uid":"film:27256"}'></div>
-        <div class="notes"><p>First line<br>Second line</p><p>Second paragraph</p></div>
-      </article>
-    `,
-      'text/html',
-    );
-
-    expect(parseNotesDocument(doc)['27256']).toBe('First line\nSecond line\n\nSecond paragraph');
-  });
-
-  it('finds a note by numeric UID or Letterboxd LID', () => {
+  it('finds notes by numeric UID or Letterboxd LID, including empty notes', () => {
     expect(getNoteForFilm({ 'film:27256': 'By UID' }, '27256', '18U8')).toBe('By UID');
     expect(getNoteForFilm({ '18U8': 'By LID' }, '27256', '18U8')).toBe('By LID');
+    expect(getNoteForFilm({ '18U8': '' }, '27256', '18U8')).toBe('');
+    expect(getNoteForFilm({}, '27256', '18U8')).toBeUndefined();
   });
 
-  it('loads the current detail view and follows list pagination', async () => {
-    document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          `
-        <article class="list-detailed-entry">
-          <div data-postered-identifier='{"lid":"18U8","uid":"film:27256"}'></div>
-          <div class="notes">First note</div>
-        </article>
-        <a class="next" href="/leongeorgi/list/watchlist-notes/detail/page/2/">Next</a>
-      `,
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          `
-        <article class="list-detailed-entry">
-          <div data-postered-identifier='{"lid":"2aH8","uid":"film:51777"}'></div>
-          <div class="notes">Second note</div>
-        </article>
-      `,
-          { status: 200 },
-        ),
-      );
+  it('does not make requests without a signed-in user', async () => {
+    document.cookie = 'letterboxd.signed.in.as=; Max-Age=0; Path=/';
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-
-    const notes = await fetchAllNotes('watchlist-notes');
-
-    expect(notes['27256']).toBe('First note');
-    expect(notes['2aH8']).toBe('Second note');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect((fetchMock.mock.calls[0]?.[0] as URL).href).toBe(
-      'https://letterboxd.com/leongeorgi/list/watchlist-notes/detail/',
-    );
-    expect((fetchMock.mock.calls[1]?.[0] as URL).href).toBe(
-      'https://letterboxd.com/leongeorgi/list/watchlist-notes/detail/page/2/',
-    );
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+    await expect(fetchAllNotes('notes')).rejects.toThrow('signed-in');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe('watchlist note saving', () => {
-  const editorHtml = `
-    <script>supermodelCSRF = 'csrf-token';</script>
-    <form id="list-form">
-      <input type="hidden" name="__csrf" value="placeholder">
-      <input type="hidden" name="filmListId" value="30077510">
-      <input type="hidden" name="filmListLid" value="km1lk">
-      <input type="hidden" name="version" value="40">
-      <input name="name" value="Watchlist Notes">
-      <select name="sharing"><option value="You" selected>You</option></select>
-      <input type="checkbox" name="numberedList">
-      <textarea name="notes">List description</textarea>
-      <input name="tag" value="recommendations">
-      <ul id="list-items">
-        <li class="film-list-entry">
-          <input type="hidden" name="listableLid" value="1UDa">
-          <div data-postered-identifier='{"lid":"1UDa","uid":"film:27256"}'></div>
-          <input type="hidden" name="review" value="Old note">
-        </li>
-        <li class="film-list-entry">
-          <input type="hidden" name="listableLid" value="2aWi">
-        </li>
-      </ul>
-    </form>
-  `;
-
-  it('builds the current Letterboxd PATCH for an existing film', () => {
-    const doc = new DOMParser().parseFromString(editorHtml, 'text/html');
-
-    expect(buildListUpdateRequest(doc, 'First line\nSecond line', '27256', '1UDa')).toEqual({
-      csrf: 'csrf-token',
-      listLid: 'km1lk',
-      update: {
-        version: 40,
-        published: false,
-        name: 'Watchlist Notes',
-        sharePolicy: 'You',
-        ranked: false,
-        description: 'List description',
-        tags: ['recommendations'],
-        entries: [
-          {
-            action: 'UPDATE',
-            position: 0,
-            notes: 'First line\nSecond line',
-            containsSpoilers: false,
-          },
-        ],
-      },
+describe('JSON note loading', () => {
+  it('loads all entries and preserves LBML, line breaks and identifier aliases', async () => {
+    const fetchMock = mockRequests(entriesStream);
+    const notes = await fetchAllNotes('watchlist-notes');
+    const note = 'First line\nSecond line\n\n<b>Source formatting</b>';
+    expect(notes).toEqual({
+      '1W7A': note,
+      'film:120': note,
+      '120': note,
+      '18U8': '',
+      'film:27256': '',
+      '27256': '',
+      abcd: '',
     });
-  });
-
-  it("uses ADD with Letterboxd's listable LID for a new film", () => {
-    const doc = new DOMParser().parseFromString(editorHtml, 'text/html');
-    const request = buildListUpdateRequest(doc, 'New film note', '99999', 'abcd');
-
-    expect(request?.update.entries).toEqual([
-      {
-        action: 'ADD',
-        listable: 'abcd',
-        notes: 'New film note',
-        containsSpoilers: false,
-      },
-    ]);
-  });
-
-  it("sends the update to Letterboxd's current list API with CSRF protection", async () => {
-    document.cookie = 'letterboxd.signed.in.as=leongeorgi; Path=/';
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(editorHtml, { status: 200 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ messages: [], data: {} }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      );
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(saveNote('Saved note', '27256', '1UDa', 'watchlist-notes')).resolves.toBe(true);
-
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((fetchMock.mock.calls[0]?.[0] as URL).href).toBe(
       'https://letterboxd.com/leongeorgi/list/watchlist-notes/edit/',
     );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://letterboxd.com/api/v0/list/km1lk');
-    const updateOptions = fetchMock.mock.calls[1]?.[1] as RequestInit;
-    expect(updateOptions.method).toBe('PATCH');
-    expect(updateOptions.headers).toEqual({
-      'Content-Type': 'application/json; charset=UTF-8',
-      'X-CSRF-TOKEN': 'csrf-token',
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ credentials: 'include' });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://letterboxd.com/s/load-list-entries');
+    const options = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(options).toMatchObject({
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
-    expect(JSON.parse(updateOptions.body as string).entries).toEqual([
-      {
-        action: 'UPDATE',
-        position: 0,
-        notes: 'Saved note',
-        containsSpoilers: false,
-      },
-    ]);
+    expect((options.body as URLSearchParams).toString()).toBe('filmListLid=XGJv0');
+  });
+
+  it('accepts a confirmed empty list', async () => {
+    mockRequests('{"success":true}\n');
+    await expect(fetchAllNotes('notes')).resolves.toEqual({});
+  });
+
+  it.each([
+    ['truncated stream', entriesStream.replace('{"success":true}', '')],
+    ['loader error', entriesStream.replace('{"success":true}', '{"success":false,"error":[]}')],
+    ['invalid JSON', entriesStream.replace('{"success":true}', 'not JSON')],
+    ['missing entry identity', '{"notes":null}\n{"success":true}'],
+    ['invalid film identity', '{"listable":{"lid":""}}\n{"success":true}'],
+    ['invalid note text', '{"listable":{"lid":"abcd"},"notes":{"lbml":42}}\n{"success":true}'],
+    ['extra termination', entriesStream + '{"success":true}\n'],
+    ['HTML login page', '<html><body>Sign in</body></html>'],
+  ])('rejects %s instead of returning partial notes', async (_label, stream) => {
+    mockRequests(stream);
+    await expect(fetchAllNotes('notes')).rejects.toThrow();
+  });
+
+  it('rejects an HTTP error even if its body resembles valid entries', async () => {
+    mockRequests(entriesStream, 403);
+    await expect(fetchAllNotes('notes')).rejects.toThrow('HTTP 403');
+  });
+});
+
+describe('minimal note saving', () => {
+  it.each(['First line\nSecond line', ''])(
+    'upserts a note with only the LID, text and version (%j)',
+    async (note) => {
+      const fetchMock = mockRequests(savedResponse);
+      await expect(saveNote(note, '1W7A', 'watchlist-notes')).resolves.toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1]?.[0]).toBe('https://letterboxd.com/api/v0/list/XGJv0');
+      const options = fetchMock.mock.calls[1]?.[1] as RequestInit;
+      expect(options).toMatchObject({
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-CSRF-TOKEN': 'fixture-csrf-token',
+        },
+      });
+      // Same request for new/existing films; never rewrite list metadata or spoiler flags.
+      expect(JSON.parse(options.body as string)).toEqual({
+        version: 7,
+        entries: [{ listable: '1W7A', notes: note }],
+      });
+    },
+  );
+
+  it('treats an HTTP 200 version conflict as failure without retrying', async () => {
+    const fetchMock = mockRequests(
+      JSON.stringify({
+        data: { id: 'XGJv0' },
+        messages: [{ type: 'Error', code: 'ListVersionMismatch', title: 'Refresh the list.' }],
+      }),
+    );
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    '',
+    '<html>Sign in</html>',
+    'null',
+    '{}',
+    '{"data":{"id":"otherList"},"messages":[]}',
+    '{"data":{"id":"XGJv0"}}',
+    '{"data":{"id":"XGJv0"},"messages":[null]}',
+  ])('does not report success for an unconfirmed response (%j)', async (body) => {
+    mockRequests(body);
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+  });
+
+  it('rejects an HTTP error', async () => {
+    mockRequests(savedResponse, 403);
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+  });
+
+  it('keeps network failures as unsuccessful saves', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+  });
+});
+
+describe('editor boundary validation', () => {
+  it.each(['', '-1', '1.5', 'NaN', '9007199254740992'])(
+    'refuses to write with invalid version %j',
+    async (version) => {
+      const fetchMock = mockRequests(
+        savedResponse,
+        200,
+        editorHtml.replace('data-list-version="7"', `data-list-version="${version}"`),
+      );
+      await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    editorHtml.replace('data-list-version="7"', ''),
+    editorHtml.replace('data-list-lid="XGJv0"', ''),
+    editorHtml.replace('fixture-csrf-token', 'placeholder'),
+    editorHtml.replace('supermodelCSRF', 'missingCsrf'),
+    '<html><body>Sign in</body></html>',
+  ])('refuses unknown or incomplete editor markup', async (html) => {
+    const fetchMock = mockRequests(savedResponse, 200, html);
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a zero version and the window CSRF assignment', async () => {
+    const fetchMock = mockRequests(
+      savedResponse,
+      200,
+      editorHtml
+        .replace('data-list-version="7"', 'data-list-version="0"')
+        .replace('var supermodelCSRF', 'window.supermodelCSRF'),
+    );
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(true);
+    expect(JSON.parse(fetchMock.mock.calls[1]?.[1].body).version).toBe(0);
+  });
+
+  it('does not write after an editor HTTP error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(editorHtml, { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(saveNote('Draft', '1W7A', 'notes')).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not write without a film LID', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(saveNote('Draft', '', 'notes')).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

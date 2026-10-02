@@ -58,12 +58,7 @@ async function save() {
   saveState.value = 'idle';
 
   if (noteListId) {
-    const success = await saveNote(
-      textareaContent.value,
-      props.filmId,
-      props.filmSharingId,
-      noteListId,
-    );
+    const success = await saveNote(textareaContent.value, props.filmSharingId, noteListId);
     if (success) {
       invalidateNotesCache();
       savedContent.value = textareaContent.value;
